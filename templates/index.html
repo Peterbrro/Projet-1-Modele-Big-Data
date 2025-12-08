@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Carte Vélib - Dashboard</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #map { height: 60vh; }
+        #stats { display:flex; justify-content:space-around; padding:10px; background:#f0f0f0; }
+        #chart-container { width: 90%; margin: 20px auto; }
+        h2 { text-align: center; margin-top: 10px; }
+        #filter { display:block; margin: 10px auto; padding:5px; }
+    </style>
+</head>
+<body>
+
+<h2>Carte des stations Vélib'</h2>
+
+<!-- Statistiques globales -->
+<div id="stats">
+    <div>Total stations: <span id="total-stations"></span></div>
+    <div>Total vélos: <span id="total-bikes"></span></div>
+    <div>Stations vides: <span id="empty-stations"></span></div>
+</div>
+
+<!-- Filtre interactif -->
+<select id="filter">
+  <option value="all">Toutes les stations</option>
+  <option value="empty">Vides</option>
+  <option value="low">Peu de vélos</option>
+</select>
+
+<!-- Carte Leaflet -->
+<div id="map"></div>
+
+<!-- Graphique Chart.js -->
+<div id="chart-container">
+    <canvas id="bikeChart" width="400" height="200"></canvas>
+</div>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+<script>
+// Récupération des stations depuis Flask
+var stations = {{ stations | tojson | safe }};
+
+// Statistiques globales
+let totalStations = stations.length;
+let totalBikes = stations.reduce((sum, st) => sum + (st.available_bikes || 0), 0);
+let emptyStations = stations.filter(st => (st.available_bikes || 0) === 0).length;
+
+document.getElementById("total-stations").textContent = totalStations;
+document.getElementById("total-bikes").textContent = totalBikes;
+document.getElementById("empty-stations").textContent = emptyStations;
+
+// Initialisation carte centrée sur Paris
+var map = L.map('map').setView([48.8566, 2.3522], 12);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+// Fonction pour ajouter les markers
+function drawMarkers(filter="all") {
+    // Supprime tous les markers existants
+    map.eachLayer(layer => { if(layer instanceof L.CircleMarker) map.removeLayer(layer); });
+
+    stations.forEach(st => {
+        let show = filter === "all" ||
+                   (filter === "empty" && (st.available_bikes || 0) === 0) ||
+                   (filter === "low" && (st.available_bikes || 0) < (st.capacity || 1)/3);
+
+        if(st.latitude && st.longitude && show) {
+            let color = 'green';
+            if((st.available_bikes || 0) === 0) color = 'red';
+            else if((st.available_bikes || 0) < (st.capacity || 1)/3) color = 'orange';
+
+            L.circleMarker([st.latitude, st.longitude], {
+                radius: 8,
+                color: color,
+                fillColor: color,
+                fillOpacity: 0.7
+            }).addTo(map)
+              .bindPopup("<b>" + (st.name || "Station") + "</b><br>" +
+                         "Vélos disponibles : " + (st.available_bikes || 0) + "<br>" +
+                         "Capacité : " + (st.capacity || 0));
+        }
+    });
+}
+
+// Affiche tous les markers au départ
+drawMarkers();
+
+// Filtre interactif
+document.getElementById("filter").addEventListener("change", function() {
+    drawMarkers(this.value);
+});
+
+// Graphique Chart.js (Top 20 stations par vélos)
+let topStations = stations.sort((a,b) => (b.available_bikes || 0) - (a.available_bikes || 0)).slice(0,20);
+let ctx = document.getElementById('bikeChart').getContext('2d');
+let chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: topStations.map(st => st.name),
+        datasets: [{
+            label: 'Vélos disponibles',
+            data: topStations.map(st => st.available_bikes),
+            backgroundColor: 'rgba(75, 192, 192, 0.6)'
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { autoSkip: false, maxTicksLimit: 20 } }, y: { beginAtZero: true } }
+    }
+});
+
+// Heatmap
+let heatData = stations.map(st => [st.latitude, st.longitude, st.available_bikes || 0]);
+L.heatLayer(heatData, {radius: 25, blur: 15, maxZoom: 17}).addTo(map);
+</script>
+
+</body>
+</html>

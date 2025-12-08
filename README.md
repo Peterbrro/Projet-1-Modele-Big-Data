@@ -1,194 +1,117 @@
-# Projet-1-Modele-Big-Data
 
 # Projet Vélib’ — Analyse et Visualisation en Temps Réel
 
-*(MongoDB, Flask, Docker, Visualisation)*
+*(MongoDB + Flask + Visualisation)*
+
+---
 
 ## Objectifs du projet
 
-Ce projet consiste à construire une architecture Big Data permettant de :
+Ce projet a pour but de :  
 
-* Collecter automatiquement les données en temps réel de l’API Vélib’.
-* Les stocker dans une base MongoDB.
-* Exposer une API REST avec Flask.
-* Visualiser les stations sur une carte interactive.
-* Déployer l’ensemble via Docker.
+- Collecter les données en temps réel des stations Vélib’ via MongoDB.  
+- Les stocker dans une base locale MongoDB.  
+- Visualiser les stations et leurs disponibilités sur un dashboard interactif.  
+- Fournir des statistiques et graphiques utiles pour comprendre la disponibilité des vélos à Paris.  
 
 ---
 
-# Fonctionnalités principales
-
-### Collecte des données
-
-* Récupération périodique (ex. toutes les 30 secondes)
-* Stockage et mise à jour automatique des données
-* Conservation optionnelle d’un historique
+## Fonctionnalités principales
 
 ### Base NoSQL : MongoDB
 
-* Adaptée aux données JSON
-* Indexation possible sur les champs utiles (stationCode, coordonnées, disponibilité)
-* Structure flexible et évolutive
+- Stockage des données JSON des stations.  
+- Structure flexible : `name`, `latitude`, `longitude`, `available_bikes`, `capacity`.  
+- Possibilité d’indexer les champs les plus utilisés pour améliorer les requêtes.  
 
 ### API Flask
 
-Endpoints pour :
+Endpoints principaux :  
 
-* Obtenir la liste complète des stations
-* Récupérer les informations d’une station précise
-* Filtrer selon la disponibilité (vélos, places, électriques, etc.)
+- `/` : dashboard web affichant la carte et les graphiques.  
+- Possibilité d’ajouter d’autres endpoints pour filtrer ou récupérer des stations spécifiques.  
 
-### Visualisation
+### Dashboard Interactif
 
-Carte interactive permettant :
+Le frontend (HTML + JS + Leaflet + Chart.js) offre :  
 
-* Affichage de toutes les stations
-* Détails en cliquant sur un marker
-* Filtrage simple
-* Mise en couleur des stations selon la disponibilité
-
-### Docker
-
-* Un conteneur pour le collecteur
-* Un conteneur pour l’API
-* Un conteneur pour MongoDB
-* Un conteneur pour le frontend (optionnel)
+- **Carte interactive** affichant toutes les stations.  
+- **Markers colorés** selon la disponibilité :  
+  - Vert : assez de vélos  
+  - Orange : peu de vélos  
+  - Rouge : station vide  
+- **Statistiques globales** en haut de page :  
+  - Nombre total de stations  
+  - Nombre total de vélos disponibles  
+  - Nombre de stations vides  
+- **Filtre interactif** : toutes les stations / stations vides / stations avec peu de vélos.  
+- **Graphique Chart.js** pour visualiser les top stations par vélos disponibles.  
+- **Heatmap** pour visualiser les zones avec forte concentration de vélos.  
 
 ---
 
-# Architecture du projet
+## Architecture du projet
 
 ```
-velib-project/
-├── data_collector/
-│   └── collector.py
-├── api/
-│   └── app.py
-├── frontend/
-│   └── index.html
-├── docker-compose.yml
-├── requirements.txt
+
+Projet-1-Modele-Big-Data/
+├── app.py           # Application Flask
+├── templates/
+│   └── index.html   # Dashboard
+├── requirements.txt # Librairies Python
 └── README.md
-```
+
+````
 
 ---
 
-# Installation
+## Installation et utilisation
 
-## 1. Cloner le projet
+### 1. Cloner le projet
 
 ```bash
-git clone <lien_de_ton_repo>
-cd velib-project
-```
+git clone https://github.com/Peterbrro/Projet-1-Modele-Big-Data.git
+cd Projet-1-Modele-Big-Data
+````
 
-## 2. Créer un fichier `.env`
+### 2. Installer les dépendances
 
-```env
-MONGO_URI=mongodb://mongo:27017/
-VELIB_API_URL=https://transport.data.gouv.fr/gbfs/velib/station_status.json
-REFRESH_INTERVAL=30
-```
-
-## 3. Lancer le projet avec Docker
+Si vous n’avez pas encore les packages Python :
 
 ```bash
-docker-compose up --build
+pip install -r requirements.txt
 ```
 
-## 4. Accès
+Assurez-vous que `requirements.txt` contient au minimum :
 
-API : [http://localhost:5000](http://localhost:5000)
-Carte : [http://localhost:8080](http://localhost:8080)
+```
+Flask
+pymongo
+```
+
+### 3. Configurer MongoDB
+
+* Installer MongoDB localement.
+* Créer une base `velibDB` et une collection `stations`.
+* Insérer vos données (soit via script Python, soit import JSON).
+
+### 4. Lancer l’application
+
+```bash
+python app.py
+```
+
+* Le dashboard est accessible à : [http://127.0.0.1:5000](http://127.0.0.1:5000)
 
 ---
 
-# Endpoints API
+## Notes sur le dashboard
 
-## Obtenir la liste des stations
-
-```
-GET /stations
-```
-
-## Filtrer les stations (exemple : au moins 5 vélos)
-
-```
-GET /stations?min_bikes=5
-```
-
-## Détails d’une station
-
-```
-GET /stations/<station_id>
-```
+* Les **stats globales** et les **markers colorés** permettent une lecture rapide de la disponibilité des vélos.
+* Le **filtre interactif** facilite la visualisation des stations critiques.
+* Le **graphique Chart.js** met en avant les stations les plus fournies ou les plus vides.
+* La **heatmap** aide à repérer les zones où les vélos sont concentrés ou rares.
 
 ---
 
-# Exemple de réponse API
-
-```json
-{
-  "stationCode": "21015",
-  "name": "République - Temple",
-  "num_bikes_available": 12,
-  "num_docks_available": 8,
-  "num_ebikes": 3,
-  "status": "IN_SERVICE",
-  "coordinates": {
-    "lat": 48.867,
-    "lon": 2.361
-  }
-}
 ```
-
----
-
-# Visualisation
-
-La carte interactive affiche :
-
-* les stations
-* le nombre de vélos disponibles
-* le nombre de places libres
-* des couleurs selon la disponibilité
-* une recherche et un zoom rapide
-
-Technologies possibles : Leaflet.js ou Mapbox.
-
----
-
-# Technologies utilisées
-
-| Composant   | Description                      |
-| ----------- | -------------------------------- |
-| MongoDB     | stockage NoSQL des données Vélib |
-| Flask       | API REST                         |
-| Python      | collecte + backend               |
-| Leaflet.js  | affichage cartographique         |
-| Docker      | conteneurisation                 |
-| Cron Python | boucle de collecte               |
-
----
-
-# Améliorations possibles
-
-* Ajout d’un modèle de prédiction (occupation future)
-* Dashboard Power BI ou Grafana
-* Historisation complète de toutes les données
-* Système d’alertes (stations saturées)
-* Index et optimisation MongoDB
-
----
-
-# Conclusion
-
-Ce projet constitue une architecture Big Data complète et adaptée à un projet scolaire :
-
-* ingestion temps réel
-* base NoSQL
-* API REST
-* visualisation
-* déploiement Docker
-
-Il peut être enrichi selon les besoins et évolue facilement.

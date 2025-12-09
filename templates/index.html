@@ -9,7 +9,6 @@
     body { margin:0; font-family: 'Segoe UI', Tahoma, sans-serif; background:#f5f5f5; }
     h2 { text-align:center; margin:15px 0; color:#333; }
 
-    /* Layout en deux colonnes */
     .container { display:flex; width:100%; height:90vh; gap:20px; padding:10px; box-sizing:border-box; }
     #map { flex:2; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.1); }
     .sidebar { flex:1; background:white; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.15); padding:15px; overflow-y:auto; display:flex; flex-direction:column; }
@@ -31,7 +30,8 @@
     .suggestion-item:hover { background:#f0f0f0; }
 
     #route-info { text-align:center; margin-top:10px; font-weight:bold; color:#333; }
-
+    .sidebar a { text-decoration:none; color:#2980b9; font-weight:bold; display:block; margin:10px 0; text-align:center; }
+    .sidebar a:hover { color:#1f618d; }
 </style>
 </head>
 <body>
@@ -68,6 +68,8 @@
 
             <button id="calculateRoute">Calculer itinéraire vélo</button>
             <div id="route-info"></div>
+
+            <a href="/stations">Voir toutes les stations</a>
         </div>
 
         <div id="chart-container">
@@ -89,7 +91,8 @@ var stations = {{ stations | tojson | safe }};
 var map = L.map('map').setView([48.8566, 2.3522], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
-var markers=[]; var bikeRouteLayer=null;
+var markers=[]; 
+var bikeRouteLayer=null;
 
 // --- Stats and markers ---
 function updateStats(filtered){
@@ -103,16 +106,19 @@ function drawMarkers(filter="all",search=""){
     let filtered=stations.filter(s=>{
         let show=filter==="all"||(filter==="empty"&&(s.available_bikes||0)===0)||(filter==="low"&&(s.available_bikes||0)<(s.capacity||1)/3);
         if(search) show=show && (s.name||"").toLowerCase().includes(search.toLowerCase());
+        if(!s.latitude || !s.longitude) return false;
         return show;
     });
     filtered.forEach(s=>{
-        if(s.latitude && s.longitude){
-            let color=(s.available_bikes===0)?"#e74c3c":(s.available_bikes<(s.capacity||1)/3)?"#f1c40f":"#2ecc71";
-            let m=L.circleMarker([s.latitude,s.longitude],{radius:8,color,fillColor:color,fillOpacity:0.7})
-                .bindPopup(`<b>${s.name}</b><br>Vélos: ${s.available_bikes||0}<br>Capacité: ${s.capacity||0}`)
-                .addTo(map);
-            markers.push(m);
-        }
+        let color=(s.available_bikes===0)?"#e74c3c":(s.available_bikes<(s.capacity||1)/3)?"#f1c40f":"#2ecc71";
+        let popupContent = `<b>${s.name}</b><br>
+            Vélos dispo: ${s.available_bikes||0}<br>
+            Vélos mécaniques: ${s.extra?.mechanical || 0}<br>
+            Vélos électriques: ${s.extra?.ebike || 0}<br>
+            Capacité totale: ${s.capacity||0}`;
+        let m=L.circleMarker([s.latitude,s.longitude],{radius:8,color,fillColor:color,fillOpacity:0.7})
+            .bindPopup(popupContent).addTo(map);
+        markers.push(m);
     });
     updateStats(filtered);
     if(window.heat) map.removeLayer(window.heat);
@@ -153,7 +159,7 @@ setupSuggestions(document.getElementById("endAddress"),document.getElementById("
 
 // --- ORS bike route ---
 async function getBikeRoute(start,end){
-    const apiKey="eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImE5Mjc3NDg4YTI5ZDQ4OGY4MzVjOTVkZmQ4YTcwNTYyIiwiaCI6Im11cm11cjY0In0=";
+    const apiKey="eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImE5Mjc3NDg4YTI5ZDQ4OGY4MzVjOTVkZmQ4YTcwNTYyIiwiaCI6Im11cm11cjY0In0="; // <-- remplace par ta clé ORS
     let resp=await fetch('https://api.openrouteservice.org/v2/directions/cycling-regular/geojson',{
         method:'POST', headers:{'Authorization':apiKey,'Content-Type':'application/json'},
         body:JSON.stringify({coordinates:[[start[1],start[0]],[end[1],end[0]]]})
@@ -172,13 +178,29 @@ document.getElementById("calculateRoute").addEventListener("click",async()=>{
     if(startCoords && endCoords){
         let geo=await getBikeRoute(startCoords,endCoords);
         if(bikeRouteLayer) map.removeLayer(bikeRouteLayer);
-        bikeRouteLayer=L.geoJSON(geo,{style:{color:'#2980b9',weight:4,opacity:0.8}}).addTo(map);
+        bikeRouteLayer=L.geoJSON(geo,{style:{color:'#2980b9',weight:6,opacity:0.9}}).addTo(map);
         map.fitBounds(bikeRouteLayer.getBounds());
 
         if(geo.features && geo.features[0].properties.summary){
             let sum=geo.features[0].properties.summary;
             document.getElementById("route-info").textContent=`Distance: ${(sum.distance/1000).toFixed(2)} km, Durée: ${(sum.duration/60).toFixed(0)} min`;
         }
+
+        let routeLine = L.polyline(geo.features[0].geometry.coordinates.map(c => [c[1], c[0]]));
+        let threshold = 100;
+        stations.forEach(s=>{
+            let latlng=L.latLng(s.latitude,s.longitude);
+            if(routeLine.getLatLngs().some(p => latlng.distanceTo(p)<threshold)){
+                let popupContent = `<b>${s.name}</b><br>
+                    Vélos dispo: ${s.available_bikes||0}<br>
+                    Vélos mécaniques: ${s.extra?.mechanical || 0}<br>
+                    Vélos électriques: ${s.extra?.ebike || 0}<br>
+                    Capacité totale: ${s.capacity||0}`;
+                L.circleMarker([s.latitude,s.longitude],{
+                    radius:6,color:'#e67e22',fillColor:'#e67e22',fillOpacity:0.7
+                }).bindPopup(popupContent).addTo(map);
+            }
+        });
     } else { alert("Départ ou arrivée introuvable"); }
 });
 </script>

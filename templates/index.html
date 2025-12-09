@@ -80,7 +80,6 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
 
 <script>
@@ -101,6 +100,25 @@ function updateStats(filtered){
     document.getElementById("empty-stations").textContent=filtered.filter(s=>(s.available_bikes||0)===0).length;
 }
 
+// --- Chart.js dynamique ---
+var bikeChart = new Chart(document.getElementById('bikeChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels: [], datasets: [{label: 'Vélos disponibles', data: [], backgroundColor: 'rgba(46,204,113,0.7)'}] },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { autoSkip:false, maxTicksLimit:10 } }, y: { beginAtZero: true } }
+    }
+});
+
+function updateChart(filteredStations){
+    let top10 = filteredStations.sort((a,b)=>(b.available_bikes||0)-(a.available_bikes||0)).slice(0,10);
+    bikeChart.data.labels = top10.map(s => s.name);
+    bikeChart.data.datasets[0].data = top10.map(s => s.available_bikes);
+    bikeChart.update();
+}
+
+// --- Draw markers (points seulement, plus de heatmap) ---
 function drawMarkers(filter="all",search=""){
     markers.forEach(m=>map.removeLayer(m)); markers=[];
     let filtered=stations.filter(s=>{
@@ -121,22 +139,13 @@ function drawMarkers(filter="all",search=""){
         markers.push(m);
     });
     updateStats(filtered);
-    if(window.heat) map.removeLayer(window.heat);
-    window.heat=L.heatLayer(filtered.map(s=>[s.latitude,s.longitude,s.available_bikes||0]),{radius:25,blur:15,maxZoom:17}).addTo(map);
+    updateChart(filtered);
 }
 drawMarkers();
 
 // --- Filters and search ---
 document.getElementById("filter").addEventListener("change",()=>drawMarkers(document.getElementById("filter").value,document.getElementById("searchStation").value));
 document.getElementById("searchStation").addEventListener("input",()=>drawMarkers(document.getElementById("filter").value,document.getElementById("searchStation").value));
-
-// --- Chart.js ---
-let topStations=stations.sort((a,b)=>(b.available_bikes||0)-(a.available_bikes||0)).slice(0,20);
-new Chart(document.getElementById('bikeChart').getContext('2d'),{
-    type:'bar',
-    data:{labels:topStations.map(s=>s.name),datasets:[{label:'Vélos disponibles',data:topStations.map(s=>s.available_bikes),backgroundColor:'rgba(46,204,113,0.7)'}]},
-    options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,maxTicksLimit:20}},y:{beginAtZero:true}}}
-});
 
 // --- Suggestions ---
 async function geocode(addr){
